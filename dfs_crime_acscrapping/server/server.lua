@@ -26,6 +26,10 @@ end
 function cancelPlayerJob(source)
     local jobId = playersScrapping[source]
 
+    if jobId == nil then
+        return
+    end
+
     local lastPlayerList = scrapsInProgress[jobId].attachedPlayers
     local newAttacheds = {}
 
@@ -116,7 +120,11 @@ Citizen.CreateThread(function()
                     playerLastCalledCops[playerServerId] = GetGameTimer()
                 end
 
-                Config.Police.CalloutLogic(coords, gender, street, zone)
+                Citizen.CreateThread(function()
+                    while not coords do Wait(0) end
+
+                    Config.Police.CalloutLogic(coords, gender, street, zone)
+                end)
            end
 
             scrapsInProgress[jobId].timeLeft = (scrapData.timeLeft - ((thisLoop - lastLoop) * #scrapData.attachedPlayers))
@@ -153,13 +161,15 @@ Citizen.CreateThread(function()
                 local loot = {}
 
                 for itemName, lootAmount in pairs(scrapData.lootData) do
-                    loot[itemName] = math.floor(math.random(math.ceil(lootAmount / 2), math.floor(lootAmount * 2)) * thisLootMultiplier)
+                    if itemName ~= "model" then
+                        loot[itemName] = math.floor(math.random(math.ceil(lootAmount / 2), math.floor(lootAmount * 2)) * thisLootMultiplier)
 
-                    if scrapData.isDiscouraged then
-                        loot[itemName] = loot[itemName] * Config.Money.DiscouragedLootMultiplier
+                        if scrapData.isDiscouraged then
+                            loot[itemName] = loot[itemName] * Config.Money.DiscouragedLootMultiplier
+                        end
+
+                        loot[itemName] = math.ceil(loot[itemName])
                     end
-
-                    loot[itemName] = math.ceil(loot[itemName])
                 end
 
                 for index, serverId in pairs(scrapData.attachedPlayers) do
@@ -175,8 +185,6 @@ Citizen.CreateThread(function()
                         if quantity > 0 then
                             for i=1, quantity do
                                 local success = player.Functions.AddItem(lootname, 1)
-
-                                print("Add item success?: "..success)
 
                                 if success then
                                     loot[lootname] = loot[lootname] - 1
@@ -283,9 +291,9 @@ QBCore.Functions.CreateCallback('dfs:crime:acScrapping:tryStartJob', function(pl
             position        = coordinates,
             timeLeft        = (
                 (lootTable.nutsandbolts or 0) * Config.Times.nutsandbolts) +
-                ((lootTable.smallsalvage or 0) * Config.Times.smallsalvage) +
+                ((lootTable.metalscrap or 0) * Config.Times.metalscrap) +
                 ((lootTable.electricalscrap or 0) * Config.Times.electricalscrap) +
-                ((lootTable.salvage or 0) * Config.Times.salvage),
+                ((lootTable.steel or 0) * Config.Times.steel),
             isDiscouraged   = coordinates.y > 900,
             hashKey         = hashKey,
             copLotto        = math.random(20, 100)
@@ -317,17 +325,24 @@ RegisterNetEvent('dfs:crime:acScrapping:turnIn', function()
     local totalPay     = 0
 
 
-    local itemList = player.Functions.GetItemsByName(playerId, "electricalscrap")
+    local itemList = player.Functions.GetItemsByName("electricalscrap")
 
-    if itemList.amount and player.Functions.RemoveItem("electricalscrap", quantity) then --this needs to be itemname, the first arg
+    for index, itemData in pairs(itemList) do
+        local payout = Config.Money.SellPrices.electricalscrap * itemData.amount
+        local success = player.Functions.RemoveItem("electricalscrap", itemData.amount)
+
+        if success then
             totalPay = (totalPay + payout)
-            player.AddBank(totalPay, 'Leroy\'s Electrical', 'Electronics Scrap')
-            TriggerClientEvent('QBCore:Notify', playerId, ('Received $%s check for your electronics scrap.'):format(totalPay))
         end
-    else
+    end
+
+    if totalPay == 0 then
         TriggerClientEvent('QBCore:Notify', playerId, 'You don\'t have any scrap to turn in.')
 
         return
+    else
+        player.Functions.AddMoney('bank', totalPay, 'Leroy\'s Electrical', 'Electronics Scrap')
+        TriggerClientEvent('QBCore:Notify', playerId, ('Received $%s check for your electronics scrap.'):format(totalPay))
     end
 end)
 

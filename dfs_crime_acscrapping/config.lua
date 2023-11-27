@@ -5,8 +5,10 @@ Config.Cooldowns = {
     Global = 4000
 }
 
-Config.SkillLogic = function(AddRep) --1% of value generated from that AC. Average shoul dbe roughly $7200/hr uncustomized
-    exports["wild-skills"]:UpdateSkill("Street Reputation", AddRep)
+Config.SkillLogic = function(AddRep) 
+    --1% of value generated from that AC. Average shoul dbe roughly $7200/hr uncustomized.
+    --Called from the server.
+    --exports["wild-skills"]:UpdateSkill("Street Reputation", AddRep)
 end
 
 Config.Police = {
@@ -17,6 +19,7 @@ Config.Police = {
     DiscouragedHeatMultiplier = 0.5,
     EnableCopRequirement = false,
     CalloutLogic = function(coords, gender, street, zone)
+        --Called from the server
         local blipTypes = {
             range_zero = {
                 displayCode = "NONE",
@@ -61,7 +64,7 @@ Config.Police = {
             {label="Destruction of Property", code="10-87", icon="fa fa-explosion", blipData=blipTypes.range_zero},
         }
 
-        local selectedMessage = math.random(1, #CallMessages)
+        local selectedMessage = CallMessages[math.random(1, #CallMessages)]
 
         TriggerEvent('ps-dispatch:server:notify', {
             message = selectedMessage.label,
@@ -102,18 +105,18 @@ Config.Money = {
     DiscouragedLootMultiplier = 0.5,
     SellPrices = {
         nutsandbolts    = 2,
-        smallsalvage    = 20,
+        metalscrap    = 20,
         electricalscrap = 75,
-        salvage         = 200,
+        steel         = 200,
     },
     ElectricSellLocation = vector3(1113.15, -325.87, 66.09),
 }
 
 Config.Times = { --Values for standard scrap are calculated as $1/0.5 seconds of scrapping
     nutsandbolts    = Config.Money.SellPrices.nutsandbolts      * 500,
-    smallsalvage    = Config.Money.SellPrices.smallsalvage      * 500,
+    metalscrap    = Config.Money.SellPrices.metalscrap      * 500,
     electricalscrap = Config.Money.SellPrices.electricalscrap   * 500,
-    salvage         = Config.Money.SellPrices.salvage           * 500,
+    steel         = Config.Money.SellPrices.steel           * 500,
 }
 
 Config.Items = {
@@ -129,12 +132,12 @@ Config.Items = {
         combinable = nil,
         description = "A few, small, nuts and bolts. Common, but critical.",
     },
-    ["smallsalvage"] = {
-        name = "smallsalvage",
-        label = "Metal Scrap [Small]",
+    ["metalscrap"] = {
+        name = "metalscrap",
+        label = "Metal Scrap",
         weight = 450,
         type = 'item',
-        image = 'smallsalvage.png',
+        image = 'metalscrap.png',
         unique = false,
         useable = false,
         shouldClose = false,
@@ -153,12 +156,12 @@ Config.Items = {
         combinable = nil,
         description = "The guts of a now dead computer.",
     },
-    ["salvage"] = {
-        name = "salvage",
-        label = "Metal Scrap",
+    ["steel"] = {
+        name = "steel",
+        label = "Steel",
         weight = 1813,
         type = 'item',
-        image = 'salvage.png',
+        image = 'steel.png',
         unique = false,
         useable = false,
         shouldClose = false,
@@ -169,137 +172,166 @@ Config.Items = {
 
 Config.Units = {
     [1131941737] = { --Medium AC
-        smallsalvage = 5,
+        metalscrap = 5,
         nutsandbolts = 5,
+        model = 'prop_aircon_m_02',
     },
     [1457658556] = { --Light Fixture - Industrial Small
         electricalscrap = 3,
-        smallsalvage    = 2,
+        metalscrap    = 2,
         nutsandbolts    = 11,
+        model = 'prop_wall_light_03a',
     },
     [1214250852] = { --Commercial Spinning Vent
-        smallsalvage = 2,
+        metalscrap = 2,
         nutsandbolts = 8,
+        model = 'prop_roofvent_06a',
     },
     [-727843691] = { --Commercial Satellite Dish, might also be 3567123605
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 11,
+        model = 'prop_satdish_s_01',
     },
     [-1625667924] = { --Micro roof AC. Might also be 2669299372
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 12,
+        model = 'prop_aircon_m_06',
     },
     [1709954128] = { --Small commercial AC
-        smallsalvage = 2,
+        metalscrap = 2,
         nutsandbolts = 11,
+        model = 'prop_aircon_m_04',
     },
     [1426534598] = { --Large commercial AC
-        salvage      = 8,
-        smallsalvage = 9,
+        steel      = 8,
+        metalscrap = 9,
         nutsandbolts = 4,
+        model = 'prop_aircon_l_03',
     },
     [1369811908] = { --Medium commercial AC with covered vent
-        smallsalvage = 6,
+        metalscrap = 6,
         nutsandbolts = 8,
+        model = 'prop_aircon_m_01',
     },
     [1195939145] = { --Massive AC Vented
-        salvage      = 4,
-        smallsalvage = 9,
+        steel      = 4,
+        metalscrap = 9,
         nutsandbolts = 6,
+        model = 'prop_aircon_l_04',
     },
     [-1188479578] = { --Medium commercial satellite, also could be 3106487718
-        smallsalvage = 3,
+        metalscrap = 3,
         nutsandbolts = 9,
+        model = 'prop_satdish_l_02',
     },
     [605277920] = { --Massive AC With Ladder
-        salvage      = 5,
-        smallsalvage = 12,
+        steel      = 5,
+        metalscrap = 12,
         nutsandbolts = 9,
+        model = 'prop_aircon_l_02',
     },
     [541723713] = { --Micro roof sattelite.
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 10,
+        model = 'prop_satdish_s_04b',
     },
     [1366469466] = { --Micro roof AC sideways.
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 12,
+        model = 'prop_aircon_m_07',
     },
     [-1025550056] = { --Micro roof sattelite with tripod. Might also be 3269417240
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 10,
+        model = 'prop_satdish_s_02',
     },
     [1948414141] = { --Small roof HVAC unit
-        smallsalvage = 3,
+        metalscrap = 3,
         nutsandbolts = 8,
+        model = 'prop_aircon_m_03',
     },
     [-1895279849] = { --Fancy commercial light fixture, small
         electricalscrap = 2,
         nutsandbolts    = 4,
+        model = 'prop_oldlight_01b',
     },
     [-1169356008] = { --Small city cell repeater
         electricalscrap = 1,
-        smallsalvage    = 2,
+        metalscrap    = 2,
         nutsandbolts    = 16,
+        model = 'h4_prop_h4_ante_on_01a',
     },
     [959280723] = { --Medium commercial street light overhand
         electricalscrap = 1,
-        smallsalvage    = 1,
+        metalscrap    = 1,
         nutsandbolts    = 4,
+        model = 'prop_wall_light_09a',
     },
     [1518466392] = { --Small commercial breakerbox
         electricalscrap = 2,
-        smallsalvage = 2,
+        metalscrap = 2,
         nutsandbolts = 1,
+        model = 'prop_elecbox_11',
     },
     [-153364983] = { --fancy small residentail light fixture
         electricalscrap = 1,
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 4,
+        model = 'prop_wall_light_07a',
     },
     [548760764] = { --CCTV camera; industrial
-        smallsalvage = 1,
+        metalscrap = 1,
+        model = 'prop_cctv_cam_01a',
     },
     [827943275] = { --massive 2-fan AC unit, industrial
-        salvage = 10,
+        steel = 10,
         electricalscrap = 10,
-        smallsalvage = 30,
+        metalscrap = 30,
         nutsandbolts = 100,
+        model = 'prop_aircon_l_01',
     },
     [1733804211] = { --Medium commercial AC
-        salvage = 1,
+        steel = 1,
         electricalscrap = 5,
-        smallsalvage = 4,
+        metalscrap = 4,
         nutsandbolts = 10,
+        model = 'vw_prop_vw_aircon_m_01',
     },
     [-686494084] = { --Large industrial electircal box
-        salvage = 1,
+        steel = 1,
         electricalscrap = 30,
-        smallsalvage = 5,
+        metalscrap = 5,
         nutsandbolts = 10,
+        model = 'prop_elecbox_10',
     },
     [1402414826] = { --small commercial square light
         electricalscrap = 1,
-        smallsalvage = 1,
+        metalscrap = 1,
         nutsandbolts = 4,
+        model = 'prop_wall_light_04a',
     },
     [493845300] = { --large industrial electric blackbox
-        salvage = 3,
+        steel = 3,
         electricalscrap = 30,
         nutsandbolts = 5,
+        model = 'prop_elecbox_16',
     },
     [-2007495856] = {--medium industrial electrical box
         electricalscrap = 10,
-        smallsalvage = 5,
+        metalscrap = 5,
         nutsandbolts = 4,
+        model = 'prop_elecbox_05a',
     },
     [1923262137] = {--small indusrtial electical blackbox
         electricalscrap = 5,
-        smallsalvage = 5,
+        metalscrap = 5,
         nutsandbolts = 5,
+        model = 'prop_elecbox_09',
     },
     [305924745] = {--medium industrial flourescent bulb
         electricalscrap = 2,
-        smallsalvage = 2,
+        metalscrap = 2,
         nutsandbolts = 8,
+        model = 'prop_wall_light_05c',
     }
 }

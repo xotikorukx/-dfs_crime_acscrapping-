@@ -27,6 +27,6 @@ client_scripts {
 
 dependencies {
     'qb-target',
-    'mythic-progbar',
+    'mythic_progbar',
     'qb-core',
 }

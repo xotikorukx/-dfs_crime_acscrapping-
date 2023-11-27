@@ -17,17 +17,42 @@ end)
 --
 
 Citizen.CreateThread(function()
-    exports['qb-target']:AddTargetModel(Config.Units, {
-        options = {
-            {
-                targeticon = "fa-solid fa-screwdriver-wrench",
+    local pickyUnits = {}
+
+    for joaat, data in pairs(Config.Units) do
+        pickyUnits[#pickyUnits+1] = data.model
+    end
+
+    print(json.encode(pickyUnits))
+
+
+    exports['qb-target']:AddTargetModel(pickyUnits, {
+        options = {{
+                targeticon = "fas fa-screwdriver-wrench",
+                icon = "fas fa-screwdriver-wrench",
                 label = "Dismantle AC",
-                item = "WEAPON_WRENCH",
+                --item = "WEAPON_WRENCH",
                 canInteract = function()
-                    if isScrapping or awaiting then return false end
-                end,
-                action = function()
+                    print("canInteract()")
+                    if isScrapping or awaiting then  
+                        print("interactfail")
+                        return false
+                    end
+
                     if lastJobCompleted + Config.Cooldowns.Global > GetGameTimer() then
+                        print("cooldown fail")
+                        return false
+                    end
+
+                    return true
+                end,
+                action = function(entity)
+                    print("action()")
+                    local isArmed, wephash = GetCurrentPedWeapon(PlayerPedId(), 1)
+
+                    if not (isArmed and wephash == `WEAPON_WRENCH`) then
+                        QBCore.Functions.Notify('You need a wrench to take that apart.', 'error', 1500)
+
                         return
                     end
     
@@ -45,24 +70,27 @@ Citizen.CreateThread(function()
                             end
     
                             awaiting = false
-                        end, onJobId, modelHash, acUnitCoordinates)
-                    end, acUnitCoordinates)
+                            atEntity = entity
+                        end, onJobId, GetEntityModel(entity), GetEntityCoords(entity))
+                    end,  GetEntityCoords(entity))
                 end
-            },
-        },
+            }},
         distance = 1.5
     })
 
-    exports['qb-target']:AddBoxZone("leroys-sell", Config.Money.ElectricSellLocation, 1.5, 0.5, {
-        minZ = Config.Money.ElectricSellLocation.z -1.0,
-        maxZ = Config.Money.ElectricSellLocation.z +1.0,
+    exports['qb-target']:AddBoxZone("leroys-sell", Config.Money.ElectricSellLocation, 1.0, 1.5, {
+        name = "leroys-sell",
+        minZ = Config.Money.ElectricSellLocation.z,
+        maxZ = Config.Money.ElectricSellLocation.z +3.0,
+        debugPoly = true,
     }, {
-        options = {
+        options = {{
             icon = "fa-solid fa-dollar-sign",
+            targeticon = "fa-solid fa-dollar-sign",
             label = "Sell Electrical Scrap",
             event = "dfs:crime:acScrapping:turnIn",
             type = "server",
-        }
+        }}
     })
 
     TriggerServerEvent('dfs:crime:acScrapping:getCompletedList')
@@ -177,6 +205,15 @@ end)
 --    end
 --end)
 
+QBCore.Functions.CreateClientCallback("dfs:crime:acscrapping:getPlayerData", function(cb)
+    local myCoords = GetEntityCoords(PlayerPedId())
+    local PlayerData = QBCore.Functions.GetPlayerData()
+    local gender = PlayerData.charinfo.gender == 1 and 'Female' or 'Male'
+
+    cb(myCoords, GetStreetNameFromHashKey(GetStreetNameAtCoord(myCoords.x, myCoords.y, myCoords.z)),
+        gender, GetLabelText(GetNameOfZone(myCoords.x, myCoords.y, myCoords.z)))
+end)
+
 RegisterNetEvent('dfs:crime:acScrapping:completedList')
 AddEventHandler('dfs:crime:acScrapping:completedList', function(list)
     scrapsCompleted = list
@@ -184,14 +221,17 @@ AddEventHandler('dfs:crime:acScrapping:completedList', function(list)
     deleteAreaACs()
 end)
 
-RegisterNetEvent('dfs:crime:acScrapping:startJob')
-AddEventHandler('dfs:crime:acScrapping:startJob', function(timeForEvent, isRestart)
+RegisterNetEvent('dfs:crime:acScrapping:startJob', function(timeForEvent, isRestart)
+    print("startJob", timeForEvent, isRestart)
     local timeForEvent = math.floor(timeForEvent)
     local timeToStopJob = 0
 
     if isScrapping then
-        TriggerEvent('mythic_progressbar:client:updateDuration', timeForEvent)
+        print("startjob1")
+        TriggerEvent('mythic_progbar:client:cancel')
+        --TriggerEvent('mythic_progbar:client:updateDuration', timeForEvent)
     else
+        print("startjob2")
         TaskTurnPedToFaceEntity(PlayerPedId(), atEntity, 500)
 
         Citizen.Wait(500)
@@ -201,7 +241,7 @@ AddEventHandler('dfs:crime:acScrapping:startJob', function(timeForEvent, isResta
     end
 
 
-    TriggerEvent('mythic_progressbar:client:progress', {
+    TriggerEvent('mythic_progbar:client:progress', {
         name         = 'dfs:crime:acScrapping:scrapping',
         duration     = timeForEvent - timeToStopJob,
         label        = 'Dismantling',
@@ -219,12 +259,12 @@ AddEventHandler('dfs:crime:acScrapping:startJob', function(timeForEvent, isResta
         },
     }, function(cancelled)
         if cancelled then
-
+            print("FinCancel")
             TriggerServerEvent('dfs:crime:acs:userCancel')
 
             Citizen.Wait(1000)
 
-            TriggerEvent('mythic_progressbar:client:progress', {
+            TriggerEvent('mythic_progbar:client:progress', {
                 name         = 'dfs:crime:acScrapping:cancelling',
                 duration     = timeForEvent * 0.05,
                 label        = 'Cancelling',
@@ -240,13 +280,17 @@ AddEventHandler('dfs:crime:acScrapping:startJob', function(timeForEvent, isResta
                     animDict = 'anim@gangops@facility@servers@',
                     anim     = 'hotwire',
                 },
-            }, function(cancelled) isScrapping = false end)
+            }, function(cancelled) 
+                isScrapping = false
+                StopAnimTask(PlayerPedId(), 'anim@gangops@facility@servers@', 'hotwire', -8.0)
+            end)
 
         else
+            print("FinNonCancel")
+            StopAnimTask(PlayerPedId(), 'anim@gangops@facility@servers@', 'hotwire', -8.0)
             lastJobCompleted = GetGameTimer()
 
             isScrapping = false
         end
-
     end)
 end)
