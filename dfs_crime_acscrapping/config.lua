@@ -5,16 +5,100 @@ Config.Cooldowns = {
     Global = 4000
 }
 
+Config.SkillLogic = function(AddRep) --1% of value generated from that AC. Average shoul dbe roughly $7200/hr uncustomized
+    exports["wild-skills"]:UpdateSkill("Street Reputation", AddRep)
+end
+
 Config.Police = {
     ChanceToCallIncreasedPerSecondIncrease = 0.05, -- MassiveAC will be 7.5 at peak per second solo, or 1.875 per player with 4. This is checked every second they're popping property. This resets every night at midnight.
     ChanceToCallPerPlayerAttachedIncrease  = 2.0,
     CallCooldown                           = 15 * 60 * 1000,
     CalloutHeatDecayPerSecondNotScrapping  = 0.2,
     DiscouragedHeatMultiplier = 0.5,
+    EnableCopRequirement = false,
+    CalloutLogic = function(coords, gender, street, zone)
+        local blipTypes = {
+            range_zero = {
+                displayCode = "NONE",
+                sprite = 436,
+                color = 1,
+                scale = 0.5,
+                length = 2, --Blip duration
+                sound = "Lose_1st",
+                sound2 = "GTAO_FM_Events_Soundset",
+                offset = "false",
+                flash = "false"
+            },
+            range_small = {
+                displayCode = "NONE",
+                sprite = 161,
+                color = 1,
+                scale = 1.5,
+                length = 5, --Blip duration
+                sound = "Lose_1st",
+                sound2 = "GTAO_FM_Events_Soundset",
+                offset = "true",
+                flash = "false"
+            },
+            range_moderate = {
+                displayCode = "NONE",
+                sprite = 161,
+                color = 1,
+                scale = 2.5,
+                length = 5, --Blip duration
+                sound = "Lose_1st",
+                sound2 = "GTAO_FM_Events_Soundset",
+                offset = "true",
+                flash = "false"
+            },
+        }
+
+        local CallMessages = {
+            --Used Codes: 10-60 Unknown Trouble. 10-83: noise complaint. 10-12: trespassing. 10-87: Destruction of Property
+            {label="Noise Complaint", code="10-83", icon="fa fa-volume-high", blipData=blipTypes.range_small},
+            {label="Unknown Trouble", code="10-60", icon="fa fa-circle-question", blipData=blipTypes.range_moderate},
+            {label="Tresspassing", code="10-12", icon="fa fa-ban", blipData=blipTypes.range_moderate},
+            {label="Destruction of Property", code="10-87", icon="fa fa-explosion", blipData=blipTypes.range_zero},
+        }
+
+        local selectedMessage = math.random(1, #CallMessages)
+
+        TriggerEvent('ps-dispatch:server:notify', {
+            message = selectedMessage.label,
+            codeName = "NONE",
+            code = selectedMessage.code,
+            icon = selectedMessage.icon,
+            priority = 2,
+            coords = coords,
+            gender = gender,
+            street = street..", "..zone,
+            camId = nil,
+            color = nil,
+            callsign = nil,
+            name = nil,
+            vehicle = nil,
+            plate = nil,
+            doorCount = nil,
+            automaticGunfire = false,
+            alert = {
+                displayCode = "NONE",
+                description = selectedMessage.label,
+                radius = 0,
+                sprite = selectedMessage.blipData.sprite or 1,
+                color = 1,
+                scale = selectedMessage.blipData.scale,
+                length = selectedMessage.blipData.length,
+                sound = selectedMessage.blipData.sound,
+                sound2 = selectedMessage.blipData.sound2,
+                offset = selectedMessage.blipData.offset,
+                flash = "false"
+            },
+            jobs = { 'leo', 'police' },
+        })
+    end,
 }
 
 Config.Money = {
-    Limit                     = 3000, --3000 Loose Salvage will turn into $4070 of salvage. 300 Small Salvage will turn into $3666 of salvage
     DiscouragedLootMultiplier = 0.5,
     SellPrices = {
         nutsandbolts    = 2,
@@ -30,6 +114,57 @@ Config.Times = { --Values for standard scrap are calculated as $1/0.5 seconds of
     smallsalvage    = Config.Money.SellPrices.smallsalvage      * 500,
     electricalscrap = Config.Money.SellPrices.electricalscrap   * 500,
     salvage         = Config.Money.SellPrices.salvage           * 500,
+}
+
+Config.Items = {
+    ["nutsandbolts"] = {
+        name = "nutsandbolts",
+        label = "Nuts and Bolts",
+        weight = 50,
+        type = 'item',
+        image = 'nutsandbolts.png',
+        unique = false,
+        useable = false,
+        shouldClose = false,
+        combinable = nil,
+        description = "A few, small, nuts and bolts. Common, but critical.",
+    },
+    ["smallsalvage"] = {
+        name = "smallsalvage",
+        label = "Metal Scrap [Small]",
+        weight = 450,
+        type = 'item',
+        image = 'smallsalvage.png',
+        unique = false,
+        useable = false,
+        shouldClose = false,
+        combinable = nil,
+        description = "A small hunk of potentially reusable metal.",
+    },
+    ["electricalscrap"] = {
+        name = "electricalscrap",
+        label = "Spare Circuit Boards",
+        weight = 10,
+        type = 'item',
+        image = 'electricalscrap.png',
+        unique = false,
+        useable = false,
+        shouldClose = false,
+        combinable = nil,
+        description = "The guts of a now dead computer.",
+    },
+    ["salvage"] = {
+        name = "salvage",
+        label = "Metal Scrap",
+        weight = 1813,
+        type = 'item',
+        image = 'salvage.png',
+        unique = false,
+        useable = false,
+        shouldClose = false,
+        combinable = nil,
+        description = "A sizable chunk of reusable metal. Good for crafting or selling!",
+    },
 }
 
 Config.Units = {

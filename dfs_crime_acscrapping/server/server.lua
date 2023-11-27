@@ -1,12 +1,17 @@
-local ERP              = nil
-local ERPInventory     = nil
+local QBCore = exports['qb-core']:GetCoreObject()
 local scrapsCompleted  = {}
 local scrapsInProgress = {}
 local serverJobId      = 0
 local playersScrapping = {}
+local playerCalloutChances = {}
+local playerLastCalledCops = {}
 
-TriggerEvent('erp:getSharedObject',    function(object) ERP          = object end)
-TriggerEvent('erp:getInventoryObject', function(object) ERPInventory = object end)
+RegisterNetEvent('QBCore:Server:UpdateObject', function()
+	if source ~= '' then return false end
+	QBCore = exports['qb-core']:GetCoreObject()
+end)
+
+exports["qb-core"]:AddItems(Config.Items)
 
 --
 -- Functions
@@ -14,8 +19,25 @@ TriggerEvent('erp:getInventoryObject', function(object) ERPInventory = object en
 
 function restartJob(jobId)
     for _, serverId in pairs(scrapsInProgress[jobId].attachedPlayers) do
-        TriggerClientEvent('erp:crime:acScrapping:startJob', serverId, (scrapsInProgress[jobId].timeLeft / #scrapsInProgress[jobId].attachedPlayers))
+        TriggerClientEvent('dfs:crime:acScrapping:startJob', serverId, (scrapsInProgress[jobId].timeLeft / #scrapsInProgress[jobId].attachedPlayers))
     end
+end
+
+function cancelPlayerJob(source)
+    local jobId = playersScrapping[source]
+
+    local lastPlayerList = scrapsInProgress[jobId].attachedPlayers
+    local newAttacheds = {}
+
+    for _, serverId in pairs(lastPlayerList) do
+        if serverId ~= source then
+            newAttacheds[#newAttacheds+1] = serverId
+        end
+    end
+
+    scrapsInProgress[jobId].attachedPlayers = newAttacheds
+
+    restartJob(jobId)
 end
 
 --
@@ -38,7 +60,7 @@ Citizen.CreateThread(function()
 
             local newAttacheds = {}
             for _, playerServerId in pairs(scrapData.attachedPlayers) do
-                local player       = ERP.GetPlayerFromId(playerServerId)
+                local player       = QBCore.Functions.GetPlayer(playerServerId)
 
                 if player then
                     newAttacheds[#newAttacheds+1] = playerServerId
@@ -54,20 +76,19 @@ Citizen.CreateThread(function()
             end
 
             for _, playerServerId in pairs(scrapData.attachedPlayers) do
-                local player       = ERP.GetPlayerFromId(playerServerId)
+                local player       = QBCore.Functions.GetPlayer(playerServerId)
 
                 local heatIncrease  = Config.Police.ChanceToCallIncreasedPerSecondIncrease * (scrapData.isDiscouraged and Config.Police.DiscouragedHeatMultiplier or 1.0)
-                local calloutChance = player.Get('acScrappingCalloutChance') or 0
+                local calloutChance = playerCalloutChances[playerServerId] or 0
                 local increasedHeat = (calloutChance + heatIncrease)
 
-
-                player.Set('acScrappingCalloutChance', increasedHeat)
+                playerCalloutChances[playerServerId] = increasedHeat
 
                 totalHeat = totalHeat + increasedHeat
 
                 if not shouldCallPolice then
                     if scrapData.copLotto * #scrapData.attachedPlayers <= totalHeat then
-                        if (player.Get('acScrappingLastCalledPolice') or -999999999) + Config.Police.CallCooldown <= GetGameTimer() then
+                        if (playerLastCalledCops[playerServerId] or 0) + Config.Police.CallCooldown <= GetGameTimer() then
                             shouldCallPolice = true
                         end
                     end
@@ -75,17 +96,28 @@ Citizen.CreateThread(function()
             end
 
             if shouldCallPolice then
-                for _, playerServerId in pairs(scrapData.attachedPlayers) do
-                    local player       = ERP.GetPlayerFromId(playerServerId)
+                local coords = nil
+                local street = nil
+                local gender = nil
+                local zone = nil
+                local count = #scrapData.attachedPlayers
+                
+                QBCore.Functions.TriggerClientCallback("dfs:crime:acscrapping:getPlayerData", scrapData.parentPlayer, function(_coords, _street, _gender, _zone)
+                    coords = _coords
+                    street  = _street
+                    gender = _gender
+                    zone = _zone
+                end)
 
-                    player.Set('acScrappingCalloutChance', 0)
-                    player.Set('acScrappingLastCalledPolice', GetGameTimer())
+                for _, playerServerId in pairs(scrapData.attachedPlayers) do
+                    local player       = QBCore.Functions.GetPlayer(playerServerId)
+
+                    playerCalloutChances[playerServerId] = 0
+                    playerLastCalledCops[playerServerId] = GetGameTimer()
                 end
 
-                TriggerClientEvent('erp:crimeAlert', scrapData.attachedPlayers[1], 'AC_SCRAPPING', scrapData.position)
-
-                TriggerEvent('erp:log', 'INFO', 'Cops Called', { calloutChance = scrapData.copLotto, }, playerServerId)
-            end
+                Config.Police.CalloutLogic(coords, gender, street, zone)
+           end
 
             scrapsInProgress[jobId].timeLeft = (scrapData.timeLeft - ((thisLoop - lastLoop) * #scrapData.attachedPlayers))
 
@@ -94,7 +126,7 @@ Citizen.CreateThread(function()
 
                 local i = #scrapData.attachedPlayers
                 --[[
-                    i:  0   lm: 0.333
+                    i:  0   lm: 0.333 (impossible)
                     i:  1   lm: 0.75
                     i:  2   lm: 1.159
                     i:  3   lm: 1.548
@@ -109,8 +141,7 @@ Citizen.CreateThread(function()
                     i:  12  lm: 2.169
                     i:  13  lm: 1.698
                     i:  14  lm: 1.075
-                    i:  15  lm: 0.288
-                    i:  16  lm: -0.675
+                    i:  15  lm: 0.288 (impossible)
                 ]]
 
                 if i > 14 then
@@ -132,75 +163,56 @@ Citizen.CreateThread(function()
                 end
 
                 for index, serverId in pairs(scrapData.attachedPlayers) do
-                    local player      = ERP.GetPlayerFromId(serverId)
-                    local profitToday = player.Get('acScrappingProfitToday') or 0
+                    local player      = QBCore.Functions.GetPlayer(serverId)
+                    local totalProfit = 0
 
                     playersScrapping[serverId] = false
 
-                    if profitToday >= Config.Money.Limit then
-                        player.ShowNotification('You\'ve reached your scrap limit for today.')
-                    elseif profitToday > Config.Money.Limit * 0.75 then
-                        player.ShowNotification('You\'re nearing your scrap limit for today.')
-                    end
+                    for lootname, lootcount in pairs(loot) do
+                        local quantity = math.ceil(lootcount / (#scrapData.attachedPlayers - index + 1))
+                        local totalStole = 0
 
-                    if profitToday < Config.Money.Limit then
-                        for lootname, lootcount in pairs(loot) do
-                            local quantity = math.ceil(lootcount / (#scrapData.attachedPlayers - index + 1))
-                            local totalStole = 0
+                        if quantity > 0 then
+                            for i=1, quantity do
+                                local success = player.Functions.AddItem(lootname, 1)
 
-                            if quantity > 0 then
-                                for i=1, quantity do
-                                    local success = false
+                                print("Add item success?: "..success)
 
-                                    if profitToday < Config.Money.Limit then
-                                        success = ERPInventory.AddItem('player', player.GetIdentifier(), lootname, 1)
-                                    end
+                                if success then
+                                    loot[lootname] = loot[lootname] - 1
 
-                                    if success then
-                                        loot[lootname] = loot[lootname] - 1
-
-                                        totalStole = totalStole + 1
-
-                                        profitToday = player.Get('acScrappingProfitToday') or 0
-                                    end
-
-                                    if not success then
-                                        break
-                                    end
-                                end
-
-                                if totalStole > 0 then
-                                    player.Set('acScrappingProfitToday', (profitToday + Config.Money.SellPrices[lootname] * totalStole))
-
-                                    player.ShowNotification(('You stole %d %s.'):format(totalStole, ERPInventory.GetItemLabel(lootname)))
-                                end
-
-                                if totalStole < quantity then
-                                    player.ShowNotification(string.format('You can\'t carry any more %s right now.', ERPInventory.GetItemLabel(lootname)))
+                                    totalStole = totalStole + 1
+                                    totalProfit = totalProfit + Config.Money.SellPrices[lootname]
                                 end
                             end
-                        end
 
-                        TriggerEvent('erp:gangs:rep:credit', player.GetServerId(), 'acUnit')
+                            if totalStole > 0 then
+                                TriggerClientEvent('QBCore:Notify', serverId, ('You stole %d %s.'):format(totalStole, Config.Items[lootname].label))
+                            end
+
+                            if totalStole < quantity then
+                                TriggerClientEvent('QBCore:Notify', serverId, string.format('You can\'t carry any more %s right now.', Config.Items[lootname].label))
+                            end
+                        end
                     end
 
-                    TriggerEvent('erp:log', 'INFO', 'Profit Metrics', { profitToday = profitToday, }, serverId)
+                    Config.SkillLogic(math.floor(totalProfit / 100))
                 end
 
                 scrapsInProgress[jobId] = nil
 
-                TriggerClientEvent('erp:crime:acScrapping:completedList', -1, scrapsCompleted)
+                TriggerClientEvent('dfs:crime:acScrapping:completedList', -1, scrapsCompleted)
             end
         end
 
         for serverId, isScrapping in pairs(playersScrapping) do
-            local player = ERP.GetPlayerFromId(serverId)
+            local player = QBCore.Functions.GetPlayer(serverId)
 
             if player then
-                local currentChance = player.Get('acScrappingCalloutChance') or 0
+                local currentChance = playerCalloutChances[serverId] or 0
 
                 if not isScrapping and currentChance > 0.0 then
-                    player.Set('acScrappingCalloutChance', currentChance - Config.Police.CalloutHeatDecayPerSecondNotScrapping)
+                    playerCalloutChances[serverId] = playerCalloutChances[serverId] - Config.Police.CalloutHeatDecayPerSecondNotScrapping
                 end
             end
         end
@@ -226,43 +238,39 @@ end)
 -- Server Callbacks
 --
 
-ERP.RegisterServerCallback('erp:crime:acScrapping:generateJobId', function(playerId, cb, coords)
+QBCore.Functions.CreateCallback('dfs:crime:acScrapping:generateJobId', function(playerId, cb, coords)
     serverJobId = serverJobId + 1
 
     for jobId, scrapData in pairs(scrapsInProgress) do
         if math.abs(#scrapData.position - #coords) < 1.0 then
             cb(jobId)
 
-            TriggerEvent('erp:log', 'INFO', 'Generated JobID', serverJobId, playerId)
-
             return
         end
     end
 
-    TriggerEvent('erp:log', 'INFO', 'Generated JobID', serverJobId, playerId)
-
     cb(serverJobId)
 end)
 
-ERP.RegisterServerCallback('erp:crime:acScrapping:tryStartJob', function(playerId, cb, jobId, hashKey, coordinates)
-    local player          = ERP.GetPlayerFromId(playerId)
+QBCore.Functions.CreateCallback('dfs:crime:acScrapping:tryStartJob', function(playerId, cb, jobId, hashKey, coordinates)
+    local player          = QBCore.Functions.GetPlayer(playerId)
 
     local playersAttached = scrapsInProgress[jobId] ~= nil and #scrapsInProgress[jobId].attachedPlayers or 0
     local policeRequired  = playersAttached - 1
 
-    if ERP.GetOnlinePoliceCount() < policeRequired then
-        if playersAttached > 0 then
+    if Config.Police.EnableCopRequirement then
+        if QBCore.Functions.GetDutyCount('police') < policeRequired then
+            if playersAttached > 0 then
 
-            TriggerEvent('erp:log', 'INFO', 'Denied player AC job; too many people on it, not enough cops.', scrapsInProgress[jobId], playerId)
+                cb(2)
 
-            cb(2)
+                return
+            end
+
+            cb(1)
 
             return
         end
-
-        cb(1)
-
-        return
     end
 
     local lootTable = Config.Units[hashKey]
@@ -287,12 +295,9 @@ ERP.RegisterServerCallback('erp:crime:acScrapping:tryStartJob', function(playerI
     scrapsInProgress[jobId].attachedPlayers[#scrapsInProgress[jobId].attachedPlayers + 1] = playerId
 
     playersScrapping[playerId] = jobId
+    local calloutChance = playerCalloutChances[playerId] or 0
 
-    local calloutChance = player.Get('acScrappingCalloutChance') or 0
-
-    player.Set('acScrappingCalloutChance', (calloutChance + Config.Police.ChanceToCallPerPlayerAttachedIncrease))
-
-    TriggerEvent('erp:log', 'INFO', 'Scrapping AC', scrapsInProgress[jobId], playerId)
+    calloutChance = calloutChance + Config.Police.ChanceToCallPerPlayerAttachedIncrease
 
     cb(0)
 
@@ -302,61 +307,36 @@ end)
 --
 -- Events
 --
+AddEventHandler('playerDropped', function()
+    cancelPlayerJob(source)
+end)
 
-RegisterNetEvent('erp:crime:acScrapping:turnIn', function()
+RegisterNetEvent('dfs:crime:acScrapping:turnIn', function()
     local playerId     = source
-    local player       = ERP.GetPlayerFromId(playerId)
-    local _, inventory = ERPInventory.GetInventory('player', player.GetIdentifier())
-    local salvageIds   = ERPInventory.GetAllItemIdsOfType('player', player.GetIdentifier(), 'electricalscrap')
+    local player       = QBCore.Functions.GetPlayer(playerId)
     local totalPay     = 0
 
-    for _, itemId in pairs(salvageIds) do
-        local quantity = inventory.items[itemId].quantity
-        local payout   = (quantity * Config.Money.SellPrices.electricalscrap)
 
-        if ERPInventory.RemoveItem('player', player.GetIdentifier(), itemId, quantity) then
+    local itemList = player.Functions.GetItemsByName(playerId, "electricalscrap")
+
+    if itemList.amount and player.Functions.RemoveItem("electricalscrap", quantity) then --this needs to be itemname, the first arg
             totalPay = (totalPay + payout)
+            player.AddBank(totalPay, 'Leroy\'s Electrical', 'Electronics Scrap')
+            TriggerClientEvent('QBCore:Notify', playerId, ('Received $%s check for your electronics scrap.'):format(totalPay))
         end
-    end
-
-    if totalPay <= 0 then
-        player.ShowNotification('You don\'t have any scrap to turn in.')
+    else
+        TriggerClientEvent('QBCore:Notify', playerId, 'You don\'t have any scrap to turn in.')
 
         return
     end
-
-    player.AddBank(totalPay, 'Leroy\'s Electrical', 'Electronics Scrap')
-    player.ShowNotification(('Received $%s check for your electronics scrap.'):format(totalPay))
 end)
 
-AddEventHandler('erp:newServerEpochDay', function()
-    for _, serverId in pairs(ERP.GetPlayers()) do
-        local player = ERP.GetPlayerFromId(serverId)
-
-        player.Set('acScrappingProfitToday', 0)
-        player.Set('acScrappingCalloutChance', 0)
-    end
+RegisterNetEvent('dfs:crime:acScrapping:getCompletedList')
+AddEventHandler('dfs:crime:acScrapping:getCompletedList', function()
+    TriggerClientEvent('dfs:crime:acScrapping:completedList', -1, scrapsCompleted)
 end)
 
-RegisterNetEvent('erp:crime:acScrapping:getCompletedList')
-AddEventHandler('erp:crime:acScrapping:getCompletedList', function()
-    TriggerClientEvent('erp:crime:acScrapping:completedList', -1, scrapsCompleted)
-end)
-
-RegisterNetEvent('erp:crime:acs:userCancel')
-AddEventHandler('erp:crime:acs:userCancel', function()
-    local jobId = playersScrapping[source]
-
-    local lastPlayerList = scrapsInProgress[jobId].attachedPlayers
-    local newAttacheds = {}
-
-    for _, serverId in pairs(lastPlayerList) do
-        if serverId ~= source then
-            newAttacheds[#newAttacheds+1] = serverId
-        end
-    end
-
-    scrapsInProgress[jobId].attachedPlayers = newAttacheds
-
-    restartJob(jobId)
+RegisterNetEvent('dfs:crime:acs:userCancel')
+AddEventHandler('dfs:crime:acs:userCancel', function()
+    cancelPlayerJob(source)
 end)

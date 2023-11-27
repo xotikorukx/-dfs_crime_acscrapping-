@@ -1,35 +1,71 @@
-local ERP               = nil
-local ERPInventory      = nil
 local shouldEndThread   = false
 local isScrapping       = false
 local scrapsCompleted   = {}
 local onJobId           = -1
 local lastJobCompleted  = 0
 local atEntity          = nil
+local QBCore = exports['qb-core']:GetCoreObject()
+local awaiting = false
 
-TriggerEvent('erp:getSharedObject',    function(object) ERP          = object end)
-TriggerEvent('erp:getInventoryObject', function(object) ERPInventory = object end)
+RegisterNetEvent('QBCore:Server:UpdateObject', function()
+	if source ~= '' then return false end
+	QBCore = exports['qb-core']:GetCoreObject()
+end)
 
 --
 -- Threads
 --
 
 Citizen.CreateThread(function()
-    for hashKey, _ in pairs(Config.Units) do
-        TriggerEvent('erp_raycast:registerInterest', hashKey, 'erp:crime:acScrapping:raycastEntered', 'erp:crime:acScrapping:raycastExited')
-    end
+    exports['qb-target']:AddTargetModel(Config.Units, {
+        options = {
+            {
+                targeticon = "fa-solid fa-screwdriver-wrench",
+                label = "Dismantle AC",
+                item = "WEAPON_WRENCH",
+                canInteract = function()
+                    if isScrapping or awaiting then return false end
+                end,
+                action = function()
+                    if lastJobCompleted + Config.Cooldowns.Global > GetGameTimer() then
+                        return
+                    end
+    
+                    local awaiting = true
+                    QBCore.Functions.TriggerCallback('dfs:crime:acScrapping:generateJobId', function(jobId)
+                        onJobId = jobId
+    
+                        QBCore.Functions.TriggerCallback('dfs:crime:acScrapping:tryStartJob', function(status)
+                            if status == 1 then
+                                QBCore.Functions.Notify('This thing is bolted down tight.', 'error', 1500)
+                            end
+    
+                            if status == 2 then
+                                QBCore.Functions.Notify('You think your time might be better used elsewhere.', 'error', 3500)
+                            end
+    
+                            awaiting = false
+                        end, onJobId, modelHash, acUnitCoordinates)
+                    end, acUnitCoordinates)
+                end
+            },
+        },
+        distance = 1.5
+    })
 
-    TriggerEvent(
-        'erp_events:registerAreaOfInterest',
-        'salvageTurnIn',
-        Config.Money.ElectricSellLocation,
-        100.0,
-        false,
-        'erp:crime:acScrapping:enteredTurnInArea',
-        'erp:crime:acScrapping:exitedTurnInArea'
-    )
+    exports['qb-target']:AddBoxZone("leroys-sell", Config.Money.ElectricSellLocation, 1.5, 0.5, {
+        minZ = Config.Money.ElectricSellLocation.z -1.0,
+        maxZ = Config.Money.ElectricSellLocation.z +1.0,
+    }, {
+        options = {
+            icon = "fa-solid fa-dollar-sign",
+            label = "Sell Electrical Scrap",
+            event = "dfs:crime:acScrapping:turnIn",
+            type = "server",
+        }
+    })
 
-    TriggerServerEvent('erp:crime:acScrapping:getCompletedList')
+    TriggerServerEvent('dfs:crime:acScrapping:getCompletedList')
 
     while true do
         Citizen.Wait(5000)
@@ -37,40 +73,6 @@ Citizen.CreateThread(function()
         deleteAreaACs()
     end
 end)
-
-function startTurnInAreaThread()
-    if turnInAreaThreadRunning then
-        return
-    end
-
-    turnInAreaThreadRunning = true
-
-    Citizen.CreateThread(function()
-        while true do
-            Citizen.Wait(0)
-
-            if not inTurnInArea then
-                turnInAreaThreadRunning = false
-
-                break
-            end
-
-            local playerId          = PlayerPedId()
-            local playerCoordinates = GetEntityCoords(playerId)
-            local distance          = #(playerCoordinates - Config.Money.ElectricSellLocation)
-
-            ERP.GUI.ShowStandardMarker(Config.Money.ElectricSellLocation)
-
-            if distance < 1.5 then
-                ERP.GUI.ShowAlert('Press ~INPUT_PICKUP~ to turn in electronics scrap.', true)
-
-                if IsControlJustReleased(0, 38) then
-                    TriggerServerEvent('erp:crime:acScrapping:turnIn')
-                end
-            end
-        end
-    end)
-end
 
 --
 -- Functions
@@ -83,7 +85,7 @@ function deleteAreaACs()
     for jobId, jobData in pairs(scrapsCompleted) do
         local distance = #(playerCoordinates - jobData.position)
 
-        if distance < 200.0 then
+        if distance < 200.0 then --I would do 400, but at a certain point the game just respawns them repeatedly
             local deletable = GetClosestObjectOfType(jobData.position, 0.1, jobData.hashKey, false, false, false)
 
             SetEntityAsMissionEntity(deletable, true, true)
@@ -96,97 +98,94 @@ end
 -- Events
 --
 
-AddEventHandler('erp:crime:acScrapping:enteredTurnInArea', function()
+AddEventHandler('dfs:crime:acScrapping:enteredTurnInArea', function()
     inTurnInArea = true
 
     startTurnInAreaThread()
 end)
 
-AddEventHandler('erp:crime:acScrapping:exitedTurnInArea', function()
+AddEventHandler('dfs:crime:acScrapping:exitedTurnInArea', function()
     inTurnInArea = false
 end)
 
-AddEventHandler('erp:crime:acScrapping:raycastEntered', function(entityId, modelHash)
-    local modelHash         = GetEntityModel(entityId)
-    local acUnitCoordinates = GetEntityCoords(entityId)
-    local acUnitMaxDimension, acUnitMinDimension = GetModelDimensions(modelHash)
-    local acUnitDimensions  = (acUnitMaxDimension - acUnitMinDimension)
-    local activationRadius  = math.abs(acUnitMaxDimension.y) + 1.5
+--Not deleting this because this is a work of ancient ingenuity on my part LOL
+--AddEventHandler('dfs:crime:acScrapping:raycastEntered', function(entityId, modelHash)
+--    local modelHash         = GetEntityModel(entityId)
+--    local acUnitCoordinates = GetEntityCoords(entityId)
+--    local acUnitMaxDimension, acUnitMinDimension = GetModelDimensions(modelHash)
+--    local acUnitDimensions  = (acUnitMaxDimension - acUnitMinDimension)
+--    local activationRadius  = math.abs(acUnitMaxDimension.y) + 1.5
+--
+--    shouldEndThread = false
+--
+--    if lastJobCompleted + Config.Cooldowns.Global > GetGameTimer() then
+--        return
+--    end
+--
+--    if not ERPInventory.GetFirstItemIdOfType('WEAPON_WRENCH') then
+--        return
+--    end
+--
+--    while not shouldEndThread do
+--        ::continue::
+--        Citizen.Wait(0)
+--
+--        local playerId            = PlayerPedId()
+--        local playerCoordinates   = GetEntityCoords(playerId)
+--        local isArmed, weaponHash = GetCurrentPedWeapon(playerId, true)
+--
+--        if 
+--            not isScrapping 
+--            and #(playerCoordinates - acUnitCoordinates) < activationRadius
+--            and (isArmed and weaponHash == `WEAPON_WRENCH`)
+--        then
+--            ERP.GUI.ShowAlert('Press ~INPUT_PICKUP~ dismantle.', true)
+--
+--            if IsControlJustReleased(0, 38) then
+-- 
+--                if not isArmed or weaponHash ~= `WEAPON_WRENCH` then
+--                    ERP.GUI.ShowNotification("You must equip your wrench to do that!")
+--
+--                    goto continue
+--                end
+--
+--                local processing = true
+--
+--                atEntity = entityId
+--
+--                QBCore.Functions.TriggerCallback('dfs:crime:acScrapping:generateJobId', function(jobId)
+--                    onJobId = jobId
+--
+--                    QBCore.Functions.TriggerCallback('dfs:crime:acScrapping:tryStartJob', function(status)
+--                        if status == 1 then
+--                            ERP.GUI.ShowNotification('This thing is bolted down tight.')
+--                        end
+--
+--                        if status == 2 then
+--                            ERP.GUI.ShowNotification('You think your time might be better used elsewhere.')
+--                        end
+--
+--                        processing = false
+--                    end, onJobId, modelHash, acUnitCoordinates)
+--                end, acUnitCoordinates)
+--
+--                while processing do
+--                    Citizen.Wait(100)
+--                end
+--            end
+--        end
+--    end
+--end)
 
-    shouldEndThread = false
-
-    if lastJobCompleted + Config.Cooldowns.Global > GetGameTimer() then
-        return
-    end
-
-    if not ERPInventory.GetFirstItemIdOfType('WEAPON_WRENCH') then
-        return
-    end
-
-    while not shouldEndThread do
-        ::continue::
-        Citizen.Wait(0)
-
-        local playerId            = PlayerPedId()
-        local playerCoordinates   = GetEntityCoords(playerId)
-        local isArmed, weaponHash = GetCurrentPedWeapon(playerId, true)
-
-        if 
-            not isScrapping 
-            and #(playerCoordinates - acUnitCoordinates) < activationRadius
-            and (isArmed and weaponHash == `WEAPON_WRENCH`)
-        then
-            ERP.GUI.ShowAlert('Press ~INPUT_PICKUP~ dismantle.', true)
-
-            if IsControlJustReleased(0, 38) then
- 
-                if not isArmed or weaponHash ~= `WEAPON_WRENCH` then
-                    ERP.GUI.ShowNotification("You must equip your wrench to do that!")
-
-                    goto continue
-                end
-
-                local processing = true
-
-                atEntity = entityId
-
-                ERP.TriggerServerCallback('erp:crime:acScrapping:generateJobId', function(jobId)
-                    onJobId = jobId
-
-                    ERP.TriggerServerCallback('erp:crime:acScrapping:tryStartJob', function(status)
-                        if status == 1 then
-                            ERP.GUI.ShowNotification('This thing is bolted down tight.')
-                        end
-
-                        if status == 2 then
-                            ERP.GUI.ShowNotification('You think your time might be better used elsewhere.')
-                        end
-
-                        processing = false
-                    end, onJobId, modelHash, acUnitCoordinates)
-                end, acUnitCoordinates)
-
-                while processing do
-                    Citizen.Wait(100)
-                end
-            end
-        end
-    end
-end)
-
-AddEventHandler('erp:crime:acScrapping:raycastExited', function(entityId, modelHash)
-    shouldEndThread = true
-end)
-
-RegisterNetEvent('erp:crime:acScrapping:completedList')
-AddEventHandler('erp:crime:acScrapping:completedList', function(list)
+RegisterNetEvent('dfs:crime:acScrapping:completedList')
+AddEventHandler('dfs:crime:acScrapping:completedList', function(list)
     scrapsCompleted = list
 
     deleteAreaACs()
 end)
 
-RegisterNetEvent('erp:crime:acScrapping:startJob')
-AddEventHandler('erp:crime:acScrapping:startJob', function(timeForEvent, isRestart)
+RegisterNetEvent('dfs:crime:acScrapping:startJob')
+AddEventHandler('dfs:crime:acScrapping:startJob', function(timeForEvent, isRestart)
     local timeForEvent = math.floor(timeForEvent)
     local timeToStopJob = 0
 
@@ -203,7 +202,7 @@ AddEventHandler('erp:crime:acScrapping:startJob', function(timeForEvent, isResta
 
 
     TriggerEvent('mythic_progressbar:client:progress', {
-        name         = 'erp:crime:acScrapping:scrapping',
+        name         = 'dfs:crime:acScrapping:scrapping',
         duration     = timeForEvent - timeToStopJob,
         label        = 'Dismantling',
         useWhileDead = false,
@@ -221,12 +220,12 @@ AddEventHandler('erp:crime:acScrapping:startJob', function(timeForEvent, isResta
     }, function(cancelled)
         if cancelled then
 
-            TriggerServerEvent('erp:crime:acs:userCancel')
+            TriggerServerEvent('dfs:crime:acs:userCancel')
 
             Citizen.Wait(1000)
 
             TriggerEvent('mythic_progressbar:client:progress', {
-                name         = 'erp:crime:acScrapping:cancelling',
+                name         = 'dfs:crime:acScrapping:cancelling',
                 duration     = timeForEvent * 0.05,
                 label        = 'Cancelling',
                 useWhileDead = false,
