@@ -1,3 +1,4 @@
 [submodule "mythic_progbar"]
 	path = mythic_progbar
 	url = https://github.com/MonsterTaerAttO/mythic_progbar
+	branch = master
