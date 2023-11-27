@@ -23,9 +23,6 @@ Citizen.CreateThread(function()
         pickyUnits[#pickyUnits+1] = data.model
     end
 
-    print(json.encode(pickyUnits))
-
-
     exports['qb-target']:AddTargetModel(pickyUnits, {
         options = {{
                 targeticon = "fas fa-screwdriver-wrench",
@@ -33,21 +30,17 @@ Citizen.CreateThread(function()
                 label = "Dismantle AC",
                 --item = "WEAPON_WRENCH",
                 canInteract = function()
-                    print("canInteract()")
-                    if isScrapping or awaiting then  
-                        print("interactfail")
+                    if isScrapping or awaiting then
                         return false
                     end
 
                     if lastJobCompleted + Config.Cooldowns.Global > GetGameTimer() then
-                        print("cooldown fail")
                         return false
                     end
 
                     return true
                 end,
                 action = function(entity)
-                    print("action()")
                     local isArmed, wephash = GetCurrentPedWeapon(PlayerPedId(), 1)
 
                     if not (isArmed and wephash == `WEAPON_WRENCH`) then
@@ -222,16 +215,13 @@ AddEventHandler('dfs:crime:acScrapping:completedList', function(list)
 end)
 
 RegisterNetEvent('dfs:crime:acScrapping:startJob', function(timeForEvent, isRestart)
-    print("startJob", timeForEvent, isRestart)
     local timeForEvent = math.floor(timeForEvent)
     local timeToStopJob = 0
 
     if isScrapping then
-        print("startjob1")
         TriggerEvent('mythic_progbar:client:cancel')
         --TriggerEvent('mythic_progbar:client:updateDuration', timeForEvent)
     else
-        print("startjob2")
         TaskTurnPedToFaceEntity(PlayerPedId(), atEntity, 500)
 
         Citizen.Wait(500)
@@ -259,7 +249,6 @@ RegisterNetEvent('dfs:crime:acScrapping:startJob', function(timeForEvent, isRest
         },
     }, function(cancelled)
         if cancelled then
-            print("FinCancel")
             TriggerServerEvent('dfs:crime:acs:userCancel')
 
             Citizen.Wait(1000)
@@ -286,7 +275,6 @@ RegisterNetEvent('dfs:crime:acScrapping:startJob', function(timeForEvent, isRest
             end)
 
         else
-            print("FinNonCancel")
             StopAnimTask(PlayerPedId(), 'anim@gangops@facility@servers@', 'hotwire', -8.0)
             lastJobCompleted = GetGameTimer()
 

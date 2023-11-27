@@ -11,7 +11,9 @@ RegisterNetEvent('QBCore:Server:UpdateObject', function()
 	QBCore = exports['qb-core']:GetCoreObject()
 end) 
 
-exports["qb-core"]:AddItems(Config.Items)
+Citizen.CreateThread(function()
+    exports["qb-core"]:AddItems(Config.Items)
+end)
 
 --
 -- Functions
@@ -184,6 +186,7 @@ Citizen.CreateThread(function()
 
                         if quantity > 0 then
                             for i=1, quantity do
+                                print("Attempting to give", lootname)
                                 local success = player.Functions.AddItem(lootname, 1)
 
                                 if success then
