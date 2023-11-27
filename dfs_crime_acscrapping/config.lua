@@ -112,7 +112,7 @@ Config.Money = {
     ElectricSellLocation = vector3(1113.15, -325.87, 66.09),
 }
 
-Config.Times = { --Values for standard scrap are calculated as $1/0.5 seconds of scrapping
+Config.Times = {
     nutsandbolts    = Config.Money.SellPrices.nutsandbolts      * 500,
     metalscrap    = Config.Money.SellPrices.metalscrap      * 500,
     electricalscrap = Config.Money.SellPrices.electricalscrap   * 500,

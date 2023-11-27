@@ -75,7 +75,7 @@ Citizen.CreateThread(function()
         name = "leroys-sell",
         minZ = Config.Money.ElectricSellLocation.z,
         maxZ = Config.Money.ElectricSellLocation.z +3.0,
-        debugPoly = true,
+        debugPoly = false,
     }, {
         options = {{
             icon = "fa-solid fa-dollar-sign",
