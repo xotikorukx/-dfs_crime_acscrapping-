@@ -11,9 +11,8 @@ RegisterNetEvent('QBCore:Server:UpdateObject', function()
 	QBCore = exports['qb-core']:GetCoreObject()
 end) 
 
-Citizen.CreateThread(function()
-    exports["qb-core"]:AddItems(Config.Items)
-end)
+exports["qb-core"]:AddItems(Config.Items)
+
 
 --
 -- Functions
