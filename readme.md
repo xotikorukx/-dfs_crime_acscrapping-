@@ -1,3 +1,8 @@
+**Dependencies**
+- A *specific version* of Mythic Progbar. [https://github.com/MonsterTaerAttO/mythic_progbar/tree/master](This should be backwards compatible)
+- qb-core
+- qb-target (Please make a PR if you want to add ox- support!)
+
 There is a rare issue where qb-inventory will insist an item does not exist because qb-core update object does not fire correctly. Create an issue if this occurs.
 
 Mythic progbar will show an error for SendAlert if you do not have mythic_notify, which is not needed by this resource. You can ignore this error, as it does not prevent any code from running.
