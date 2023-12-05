@@ -1,6 +1,6 @@
 **Dependencies**
 - A *specific version* of Mythic Progbar. (https://github.com/MonsterTaerAttO/mythic_progbar/tree/master, This should be backwards compatible). It is added as a submodule, but as long as it is running (even if installed eternally) nobody gonna care.
-- qb-core
+- qb-core (Please make a PR if you want to add other framework support!)
 - qb-target (Please make a PR if you want to add ox- support!)
 - ps-disptach (Please make a PR if you want to add other callouts support!)
 
