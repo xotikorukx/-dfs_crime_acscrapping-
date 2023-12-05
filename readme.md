@@ -2,6 +2,7 @@
 - A *specific version* of Mythic Progbar. (https://github.com/MonsterTaerAttO/mythic_progbar/tree/master, This should be backwards compatible)
 - qb-core
 - qb-target (Please make a PR if you want to add ox- support!)
+- ps-disptach (Please make a PR if you want to add other callouts support!)
 
 There is a rare issue where qb-inventory will insist an item does not exist because qb-core update object does not fire correctly. Create an issue if this occurs.
 
