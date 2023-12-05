@@ -1,5 +1,5 @@
 **Dependencies**
-- A *specific version* of Mythic Progbar. [https://github.com/MonsterTaerAttO/mythic_progbar/tree/master](This should be backwards compatible)
+- A *specific version* of Mythic Progbar. (https://github.com/MonsterTaerAttO/mythic_progbar/tree/master, This should be backwards compatible)
 - qb-core
 - qb-target (Please make a PR if you want to add ox- support!)
 
